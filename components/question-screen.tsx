@@ -30,7 +30,7 @@ export function QuestionScreen({
         </p>
 
         <div className="bg-muted/50 rounded-lg p-4 mb-4">
-          <p className="text-foreground/80 text-sm">
+          <p className="text-muted-foreground text-sm">
             Lea cada frase y decida si describe o no su forma de ser.
           </p>
         </div>
@@ -54,7 +54,7 @@ export function QuestionScreen({
       <div className="bg-background rounded-lg border border-border p-6">
         {/* Question number */}
         <div className="flex items-center gap-2 mb-4">
-          <div className="size-10 rounded-full bg-primary/10 border-2 border-primary flex items-center justify-center">
+          <div className="size-10 rounded-full bg-muted border-2 border-primary flex items-center justify-center">
             <span className="text-primary font-semibold text-sm">{questionNumber}</span>
           </div>
           <span className="text-muted-foreground text-sm">respondidas</span>

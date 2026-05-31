@@ -26,19 +26,25 @@ export function Assessment() {
     return <ResultsScreen state={state} onReset={resetAssessment} />
   }
 
+  function Header() {
+    return (
+        <header className="bg-primary text-primary-foreground font-semibold border-b border-border px-4 py-3">
+    <div className="max-w-3xl mx-auto flex items-center justify-between">
+      Evaluacion MIPS
+      <div className="size-9 rounded-full border-2 border-primary-foreground flex items-center justify-center">
+        <span className="text-sm text-primary-foreground">?</span>
+      </div>
+    </div>
+  </header>
+)
+  }
+
   // Registration screen (before starting)
   if (!state.isRegistered && !isStarted) {
     return (
-      <div className="min-h-screen bg-muted/30">
+      <div className="min-h-screen bg-background/30">
         {/* Header */}
-        <header className="bg-background border-b border-border px-4 py-3">
-          <div className="max-w-3xl mx-auto flex items-center justify-between">
-            <span className="font-semibold text-foreground">Evaluacion MIPS</span>
-            <div className="size-9 rounded-full border border-border flex items-center justify-center">
-              <span className="text-sm text-muted-foreground">?</span>
-            </div>
-          </div>
-        </header>
+        <Header />
 
         <main className="max-w-3xl mx-auto px-4 py-8">
           {dbError && (
@@ -66,14 +72,7 @@ export function Assessment() {
     return (
       <div className="min-h-screen bg-muted/30">
         {/* Header */}
-        <header className="bg-background border-b border-border px-4 py-3">
-          <div className="max-w-3xl mx-auto flex items-center justify-between">
-            <span className="font-semibold text-foreground">Evaluacion MIPS</span>
-            <div className="size-9 rounded-full border border-border flex items-center justify-center">
-              <span className="text-sm text-muted-foreground">?</span>
-            </div>
-          </div>
-        </header>
+        <Header />
 
         <main className="max-w-3xl mx-auto px-4 py-8">
           <div className="bg-background rounded-lg border border-border p-6 md:p-8">
@@ -130,14 +129,7 @@ export function Assessment() {
   return (
     <div className="min-h-screen bg-muted/30">
       {/* Header */}
-      <header className="bg-background border-b border-border px-4 py-3">
-        <div className="max-w-3xl mx-auto flex items-center justify-between">
-          <span className="font-semibold text-foreground">Evaluacion MIPS</span>
-          <div className="size-9 rounded-full border border-border flex items-center justify-center">
-            <span className="text-sm text-muted-foreground">?</span>
-          </div>
-        </div>
-      </header>
+      <Header />
 
       {/* Back link */}
       <div className="max-w-3xl mx-auto px-4 py-3">

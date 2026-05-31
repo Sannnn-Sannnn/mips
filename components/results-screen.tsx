@@ -138,7 +138,7 @@ export function ResultsScreen({ state, onReset }: ResultsScreenProps) {
               <div>
                 <p className="font-medium text-foreground">{state.user.nombre}</p>
                 <p className="text-sm text-muted-foreground">
-                  {state.user.edad} anios
+                  {state.user.edad} años
                   {state.user.email && ` - ${state.user.email}`}
                 </p>
               </div>
@@ -231,14 +231,14 @@ export function ResultsScreen({ state, onReset }: ResultsScreenProps) {
 
         {/* Dimensions that need session review */}
         {Object.values(state.dimensionScores).some(s => s.needsSessionReview) && (
-          <div className="bg-amber-50 dark:bg-amber-950/20 rounded-lg border border-amber-200 dark:border-amber-800 p-6">
+          <div className="bg-destructive rounded-lg border border-destructive p-6">
             <div className="flex items-start gap-3">
-              <AlertCircle className="size-5 text-amber-600 flex-shrink-0 mt-0.5" />
+              <AlertCircle className="size-5 text-destructive-foreground shrink-0 mt-0.5" />
               <div>
-                <h2 className="text-sm font-semibold text-amber-800 dark:text-amber-200 mb-2">
+                <h2 className="font-bold text-destructive-foreground mb-2">
                   Dimensiones para explorar en sesion
                 </h2>
-                <p className="text-sm text-amber-700 dark:text-amber-300 mb-3">
+                <p className="text-sm text-destructive-foreground mb-3 font-semibold">
                   Las siguientes dimensiones mostraron tendencias mixtas o variabilidad contextual despues de las preguntas de validacion. 
                   Esto no representa un error, sino una oportunidad para explorar en mayor profundidad durante la sesion:
                 </p>
@@ -246,9 +246,9 @@ export function ResultsScreen({ state, onReset }: ResultsScreenProps) {
                   {dimensions.filter(d => state.dimensionScores[d.id]?.needsSessionReview).map(dimension => {
                     const score = state.dimensionScores[dimension.id]
                     return (
-                      <li key={dimension.id} className="text-sm text-amber-800 dark:text-amber-200">
+                      <li key={dimension.id} className="text-sm text-destructive-foreground">
                         <span className="font-medium">{dimension.poleA.name} vs {dimension.poleB.name}</span>
-                        <span className="text-amber-600 dark:text-amber-400 text-xs ml-2">
+                        <span className="text-destructive-foreground text-xs ml-2">
                           ({score?.questionsAsked.length || 0} preguntas, confianza {score?.confidence === 'medium' ? 'media' : 'baja'})
                         </span>
                       </li>
