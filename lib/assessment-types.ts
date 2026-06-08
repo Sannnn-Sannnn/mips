@@ -38,6 +38,7 @@ export interface DimensionScore {
     questionId: number
     answer: 'V' | 'F'
     timestamp: number
+    responseTimeMs: number
   }[]
   /** Flag when max questions reached but confidence still not high - needs session review */
   needsSessionReview?: boolean
@@ -76,6 +77,9 @@ export interface AssessmentState {
   isComplete: boolean
   totalQuestionsAnswered: number
   estimatedRemaining: number
+  moduleStartedAt: number | null
+  moduleCompletedAt: number | null
+  currentQuestionStartedAt: number | null
   
   // Quality metrics
   lastAnswerTime: number | null

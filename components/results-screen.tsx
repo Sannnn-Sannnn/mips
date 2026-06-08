@@ -6,6 +6,7 @@ import { dimensions, getQuestionById } from '@/lib/assessment-data'
 import { Button } from '@/components/ui/button'
 import { cn } from '@/lib/utils'
 import { RefreshCw, ChevronLeft, User, AlertCircle } from 'lucide-react'
+import { calculateDurationSeconds } from '@/lib/assessment-timing'
 
 interface ResultsScreenProps {
   state: AssessmentState
@@ -43,6 +44,22 @@ function getConfidenceLabel(confidence: 'low' | 'medium' | 'high'): string {
     case 'medium': return 'Media'
     case 'low': return 'Baja'
   }
+}
+
+function formatDuration(totalSeconds: number): string {
+  if (totalSeconds <= 0) return '0 seg'
+
+  const minutes = Math.floor(totalSeconds / 60)
+  const seconds = totalSeconds % 60
+
+  if (minutes === 0) return `${seconds} seg`
+  if (seconds === 0) return `${minutes} min`
+  return `${minutes} min ${seconds} seg`
+}
+
+function formatResponseTime(responseTimeMs: number): string {
+  if (responseTimeMs < 1000) return `${responseTimeMs} ms`
+  return `${(responseTimeMs / 1000).toFixed(1)} seg`
 }
 
 function generateSummary(state: AssessmentState): string {
@@ -97,6 +114,10 @@ export function ResultsScreen({ state, onReset }: ResultsScreenProps) {
   const [showDetails, setShowDetails] = useState(false)
 
   const summary = useMemo(() => generateSummary(state), [state])
+  const totalDurationSeconds = calculateDurationSeconds(state.moduleStartedAt, state.moduleCompletedAt ?? Date.now())
+  const averageResponseSeconds = state.totalQuestionsAnswered > 0
+    ? Math.round(totalDurationSeconds / state.totalQuestionsAnswered)
+    : 0
 
   const groupedDimensions = {
     'Metas Motivacionales': dimensions.filter(d => d.category === 'Metas Motivacionales'),
@@ -161,8 +182,19 @@ export function ResultsScreen({ state, onReset }: ResultsScreenProps) {
             </p>
           </div>
 
-          <div className="mt-4 text-xs text-muted-foreground">
-            Preguntas respondidas: {state.totalQuestionsAnswered}
+          <div className="mt-4 grid gap-3 sm:grid-cols-3">
+            <div className="rounded-lg border border-border bg-background px-3 py-2">
+              <p className="text-xs text-muted-foreground">Preguntas respondidas</p>
+              <p className="text-sm font-semibold text-foreground">{state.totalQuestionsAnswered}</p>
+            </div>
+            <div className="rounded-lg border border-border bg-background px-3 py-2">
+              <p className="text-xs text-muted-foreground">Tiempo total</p>
+              <p className="text-sm font-semibold text-foreground">{formatDuration(totalDurationSeconds)}</p>
+            </div>
+            <div className="rounded-lg border border-border bg-background px-3 py-2">
+              <p className="text-xs text-muted-foreground">Promedio por pregunta</p>
+              <p className="text-sm font-semibold text-foreground">{formatDuration(averageResponseSeconds)}</p>
+            </div>
           </div>
         </div>
 
@@ -219,7 +251,9 @@ export function ResultsScreen({ state, onReset }: ResultsScreenProps) {
                         {confidence}
                       </span>
                       {score.needsSessionReview && (
-                        <AlertCircle className="size-3.5 text-amber-500" title="Requiere revision en sesion" />
+                        <span title="Requiere revision en sesion">
+                          <AlertCircle className="size-3.5 text-amber-500" />
+                        </span>
                       )}
                     </div>
                   </div>
@@ -322,6 +356,9 @@ export function ResultsScreen({ state, onReset }: ResultsScreenProps) {
                               answer.answer === 'V' ? 'text-emerald-600' : 'text-rose-600'
                             )}>
                               {answer.answer === 'V' ? 'Verdadero' : 'Falso'}
+                              <span className="ml-2 font-normal text-muted-foreground">
+                                Tiempo: {formatResponseTime(answer.responseTimeMs)}
+                              </span>
                             </p>
                           </div>
                         )

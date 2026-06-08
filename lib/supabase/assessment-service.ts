@@ -1,5 +1,5 @@
-import { createClient } from './client'
-import type { AssessmentState, DimensionScore, UserRegistration } from '@/lib/assessment-types'
+import { createClient, isSupabaseConfigured } from './client'
+import type { AssessmentState, UserRegistration } from '@/lib/assessment-types'
 
 // Map local confidence levels to database enum
 function mapConfidenceLevel(confidence: 'low' | 'medium' | 'high'): 'low' | 'medium' | 'high' {
@@ -43,10 +43,23 @@ const LOCAL_TO_DB_DIMENSION_MAP: Record<string, string> = {
 // Cache dimensions mapping (local ID -> database dimension)
 let dimensionsCache: Map<string, DatabaseDimension> | null = null
 
+export function canPersistAssessment(): boolean {
+  return isSupabaseConfigured()
+}
+
+function getSupabaseClient() {
+  const supabase = createClient()
+  if (!supabase) {
+    throw new Error('Supabase is not configured')
+  }
+  return supabase
+}
+
 export async function getDimensionsMapping(): Promise<Map<string, DatabaseDimension>> {
   if (dimensionsCache) return dimensionsCache
+  if (!canPersistAssessment()) return new Map()
 
-  const supabase = createClient()
+  const supabase = getSupabaseClient()
   const { data, error } = await supabase
     .from('dimensions')
     .select('*')
@@ -85,7 +98,7 @@ export function getDbDimensionIdByLocalId(
 
 // Create a user in the database
 export async function createUser(registration: UserRegistration): Promise<string> {
-  const supabase = createClient()
+  const supabase = getSupabaseClient()
   
   const { data, error } = await supabase
     .from('users')
@@ -106,13 +119,14 @@ export async function createUser(registration: UserRegistration): Promise<string
 }
 
 // Create a test session
-export async function createTestSession(userId: string): Promise<string> {
-  const supabase = createClient()
+export async function createTestSession(userId: string, startedAtIso: string): Promise<string> {
+  const supabase = getSupabaseClient()
   
   const { data, error } = await supabase
     .from('test_sessions')
     .insert({
       user_id: userId,
+      started_at: startedAtIso,
       status: 'in_progress',
       total_questions_answered: 0,
       total_validation_questions: 0
@@ -140,7 +154,7 @@ export async function saveAnswer(
   responseTimeMs: number,
   wasValidation: boolean
 ): Promise<void> {
-  const supabase = createClient()
+  const supabase = getSupabaseClient()
   
   const { error } = await supabase
     .from('answers')
@@ -168,7 +182,7 @@ export async function updateSessionProgress(
   totalQuestionsAnswered: number,
   totalValidationQuestions: number
 ): Promise<void> {
-  const supabase = createClient()
+  const supabase = getSupabaseClient()
   
   const { error } = await supabase
     .from('test_sessions')
@@ -188,10 +202,11 @@ export async function updateSessionProgress(
 export async function completeTestSession(
   sessionId: string,
   state: AssessmentState,
+  completedAtIso: string,
   durationSeconds: number,
   dimensionsMapping: Map<string, DatabaseDimension>
 ): Promise<void> {
-  const supabase = createClient()
+  const supabase = getSupabaseClient()
   
   // Determine overall confidence
   const confidenceCounts = { low: 0, medium: 0, high: 0 }
@@ -219,7 +234,7 @@ export async function completeTestSession(
     .from('test_sessions')
     .update({
       status: 'completed',
-      completed_at: new Date().toISOString(),
+      completed_at: completedAtIso,
       total_questions_answered: state.totalQuestionsAnswered,
       overall_confidence: overallConfidence,
       duration_seconds: durationSeconds,

@@ -13,9 +13,16 @@ import {
   createTestSession,
   saveAnswer,
   completeTestSession,
+  canPersistAssessment,
   getDimensionsMapping,
   getDbDimensionIdByLocalId
 } from '@/lib/supabase/assessment-service'
+import {
+  calculateDurationSeconds,
+  calculateResponseTimeMs,
+  getCurrentTimestamp,
+  toIsoTimestamp
+} from '@/lib/assessment-timing'
 
 // Configuration
 const CONFIG = {
@@ -96,7 +103,7 @@ function initializeDimensionScores(): Record<string, DimensionScore> {
 interface DbSession {
   userId: string
   sessionId: string
-  startTime: number
+  startTime: number | null
 }
 
 export function useSimpleAssessment() {
@@ -118,6 +125,9 @@ export function useSimpleAssessment() {
     isComplete: false,
     totalQuestionsAnswered: 0,
     estimatedRemaining: 60, // 12 dimensions x 5 questions (minimum)
+    moduleStartedAt: null,
+    moduleCompletedAt: null,
+    currentQuestionStartedAt: null,
     lastAnswerTime: null,
     fastAnswerCount: 0,
     sameOptionCount: 0,
@@ -135,6 +145,8 @@ export function useSimpleAssessment() {
 
   // Initialize dimensions mapping on mount
   useEffect(() => {
+    if (!canPersistAssessment()) return
+
     getDimensionsMapping()
       .then(mapping => {
         dimensionsMappingRef.current = mapping
@@ -153,6 +165,17 @@ export function useSimpleAssessment() {
     setIsSaving(true)
     setDbError(null)
     
+    if (!canPersistAssessment()) {
+      setState(prev => ({
+        ...prev,
+        user: registration,
+        isRegistered: true
+      }))
+      dbSessionRef.current = null
+      setIsSaving(false)
+      return
+    }
+
     try {
       // Create user in database
       const userId = await createUser(registration)
@@ -168,7 +191,7 @@ export function useSimpleAssessment() {
       dbSessionRef.current = {
         userId,
         sessionId: '', // Will be set when assessment starts
-        startTime: 0
+        startTime: null
       }
     } catch (err) {
       console.error('Failed to register user:', err)
@@ -188,15 +211,19 @@ export function useSimpleAssessment() {
     const initialQueue = buildInitialQuestionQueue()
     const firstQuestionId = initialQueue[0]
     const remainingQueue = initialQueue.slice(1)
+    const moduleStartedAt = getCurrentTimestamp()
     
     setIsSaving(true)
     
     try {
       // Create test session in database
-      if (dbSessionRef.current?.userId) {
-        const sessionId = await createTestSession(dbSessionRef.current.userId)
+      if (canPersistAssessment() && dbSessionRef.current?.userId) {
+        const sessionId = await createTestSession(
+          dbSessionRef.current.userId,
+          toIsoTimestamp(moduleStartedAt)
+        )
         dbSessionRef.current.sessionId = sessionId
-        dbSessionRef.current.startTime = Date.now()
+        dbSessionRef.current.startTime = moduleStartedAt
       }
     } catch (err) {
       console.error('Failed to create test session:', err)
@@ -204,6 +231,8 @@ export function useSimpleAssessment() {
     } finally {
       setIsSaving(false)
     }
+
+    const firstQuestionStartedAt = getCurrentTimestamp()
     
     setState(prev => ({
       ...prev,
@@ -214,7 +243,11 @@ export function useSimpleAssessment() {
       completedDimensions: [],
       isComplete: false,
       totalQuestionsAnswered: 0,
-      estimatedRemaining: initialQueue.length
+      estimatedRemaining: initialQueue.length,
+      moduleStartedAt,
+      moduleCompletedAt: null,
+      currentQuestionStartedAt: firstQuestionStartedAt,
+      lastAnswerTime: null
     }))
     setIsStarted(true)
     pendingDisambiguationRef.current = new Map()
@@ -224,8 +257,8 @@ export function useSimpleAssessment() {
     const currentQuestion = getCurrentQuestion()
     if (!currentQuestion) return
 
-    const now = Date.now()
-    const answerTime = state.lastAnswerTime ? now - state.lastAnswerTime : Infinity
+    const now = getCurrentTimestamp()
+    const answerTime = calculateResponseTimeMs(state.currentQuestionStartedAt, now)
     const isFastAnswer = answerTime < CONFIG.fastAnswerMs
     const isSameOption = state.lastOption === answer
 
@@ -261,7 +294,8 @@ export function useSimpleAssessment() {
     const newAnswers = [...prevScore.answers, {
       questionId: currentQuestion.id,
       answer,
-      timestamp: now
+      timestamp: now,
+      responseTimeMs: answerTime
     }]
     const newConfidence = calculateConfidence(newPoleACount, newPoleBCount)
 
@@ -277,7 +311,7 @@ export function useSimpleAssessment() {
           answer === 'V',
           inferredPole,
           newPoleACount / (newPoleACount + newPoleBCount) || 0,
-          answerTime < Infinity ? answerTime : 0,
+          answerTime,
           currentQuestion.priority === 'validation' || currentQuestion.priority === 'disambiguation'
         ).catch(err => console.error('Failed to save answer:', err))
       }
@@ -341,6 +375,8 @@ export function useSimpleAssessment() {
 
     // Check if assessment is complete
     const isComplete = nextQuestionId === null
+    const moduleCompletedAt = isComplete ? now : null
+    const nextQuestionStartedAt = isComplete ? null : getCurrentTimestamp()
 
     // Calculate flags
     const updatedScores = {
@@ -364,6 +400,8 @@ export function useSimpleAssessment() {
       isComplete,
       totalQuestionsAnswered: state.totalQuestionsAnswered + 1,
       estimatedRemaining: Math.max(0, remainingQueue.length + (nextQuestionId ? 1 : 0)),
+      moduleCompletedAt,
+      currentQuestionStartedAt: nextQuestionStartedAt,
       lastAnswerTime: now,
       fastAnswerCount: newFastCount,
       sameOptionCount: newSameCount,
@@ -382,10 +420,11 @@ export function useSimpleAssessment() {
 
     // If complete, save final results to database
     if (isComplete && dbSessionRef.current?.sessionId && dimensionsMappingRef.current) {
-      const durationSeconds = Math.round((Date.now() - dbSessionRef.current.startTime) / 1000)
+      const durationSeconds = calculateDurationSeconds(state.moduleStartedAt, now)
       completeTestSession(
         dbSessionRef.current.sessionId,
         newState,
+        toIsoTimestamp(now),
         durationSeconds,
         dimensionsMappingRef.current
       ).catch(err => console.error('Failed to complete session:', err))
@@ -411,6 +450,9 @@ export function useSimpleAssessment() {
       isComplete: false,
       totalQuestionsAnswered: 0,
       estimatedRemaining: 60, // 12 dimensions x 5 fixed questions
+      moduleStartedAt: null,
+      moduleCompletedAt: null,
+      currentQuestionStartedAt: null,
       lastAnswerTime: null,
       fastAnswerCount: 0,
       sameOptionCount: 0,

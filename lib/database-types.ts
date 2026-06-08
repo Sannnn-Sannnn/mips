@@ -24,6 +24,7 @@ export interface DbTestSession {
   user_id: string // FK to users
   started_at: string // ISO timestamp
   completed_at?: string // ISO timestamp
+  duration_seconds?: number
   total_questions_answered: number
   
   // Quality flags
@@ -47,7 +48,7 @@ export interface DbAnswer {
   dimension_id: string
   answer: 'V' | 'F'
   timestamp: string // ISO timestamp
-  answer_duration_ms?: number // Time taken to answer
+  response_time_ms?: number // Time taken to answer
 }
 
 export interface DbDimensionResult {
@@ -84,6 +85,7 @@ export interface DbDimensionResult {
  *   user_id UUID REFERENCES users(id) ON DELETE CASCADE,
  *   started_at TIMESTAMPTZ DEFAULT NOW(),
  *   completed_at TIMESTAMPTZ,
+ *   duration_seconds INTEGER,
  *   total_questions_answered INTEGER DEFAULT 0,
  *   flag_low_quality BOOLEAN DEFAULT FALSE,
  *   flag_repetitive_pattern BOOLEAN DEFAULT FALSE,
@@ -101,7 +103,7 @@ export interface DbDimensionResult {
  *   dimension_id TEXT NOT NULL,
  *   answer TEXT CHECK (answer IN ('V', 'F')),
  *   timestamp TIMESTAMPTZ DEFAULT NOW(),
- *   answer_duration_ms INTEGER
+ *   response_time_ms INTEGER
  * );
  * 
  * -- Dimension results table
@@ -124,7 +126,8 @@ export interface DbDimensionResult {
  */
 
 // Helper function to transform AssessmentState to database format
-import type { AssessmentState, DimensionScore } from './assessment-types'
+import type { AssessmentState } from './assessment-types'
+import { calculateDurationSeconds } from './assessment-timing'
 
 export function transformStateForPersistence(state: AssessmentState): {
   user: Omit<DbUser, 'id' | 'created_at'> | null
@@ -141,7 +144,10 @@ export function transformStateForPersistence(state: AssessmentState): {
 
   // Transform session
   const session: Omit<DbTestSession, 'id' | 'user_id' | 'started_at'> = {
-    completed_at: state.isComplete ? new Date().toISOString() : undefined,
+    completed_at: state.moduleCompletedAt ? new Date(state.moduleCompletedAt).toISOString() : undefined,
+    duration_seconds: state.moduleCompletedAt
+      ? calculateDurationSeconds(state.moduleStartedAt, state.moduleCompletedAt)
+      : undefined,
     total_questions_answered: state.totalQuestionsAnswered,
     flag_low_quality: state.flags.lowQuality,
     flag_repetitive_pattern: state.flags.repetitivePattern,
@@ -158,7 +164,8 @@ export function transformStateForPersistence(state: AssessmentState): {
         question_id: answer.questionId,
         dimension_id: dimensionId,
         answer: answer.answer,
-        timestamp: new Date(answer.timestamp).toISOString()
+        timestamp: new Date(answer.timestamp).toISOString(),
+        response_time_ms: answer.responseTimeMs
       })
     }
   }
